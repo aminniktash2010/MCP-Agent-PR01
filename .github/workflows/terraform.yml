@@ -49,21 +49,38 @@ jobs:
       run: terraform fmt -check -recursive
       continue-on-error: true
 
-    - name: Select Terraform Workspace
-      id: workspace
+    - name: Debug Directory Structure
       run: |
-        cd environments/${TF_WORKSPACE}
-        terraform workspace select ${TF_WORKSPACE} || terraform workspace new ${TF_WORKSPACE}
+        echo "Workspace Directory Contents:"
+        ls -la environments/${TF_WORKSPACE}
+        echo "Root Directory Contents:"
+        ls -la
+        echo "Current Working Directory:"
+        pwd
 
     - name: Terraform Init
       id: init
       working-directory: environments/${TF_WORKSPACE}
       run: |
         terraform init \
-          -backend-config="resource_group_name=rg-terraform-demo" \
-          -backend-config="storage_account_name=tfstatevnopvsh3" \
+          -backend-config="resource_group_name=rg-mcp-tfstate" \
+          -backend-config="storage_account_name=stmcptfstate" \
           -backend-config="container_name=tfstate" \
-          -backend-config="key=${TF_WORKSPACE}.tfstate"
+          -backend-config="key=mcp-${TF_WORKSPACE}.tfstate"
+        
+    - name: Select or Create Terraform Workspace
+      id: workspace
+      working-directory: environments/${TF_WORKSPACE}
+      run: |
+        echo "Available workspaces:"
+        terraform workspace list || true
+        echo "Attempting to select or create workspace: ${TF_WORKSPACE}"
+        if ! terraform workspace select ${TF_WORKSPACE} 2>/dev/null; then
+          echo "Creating new workspace: ${TF_WORKSPACE}"
+          terraform workspace new ${TF_WORKSPACE}
+        fi
+        echo "Current workspace:"
+        terraform workspace show
 
     - name: Terraform Validate
       id: validate

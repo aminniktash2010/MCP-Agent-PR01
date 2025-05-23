@@ -6,7 +6,7 @@ terraform {
     }
   }
   backend "azurerm" {
-    key = "mcp-dev.tfstate"  # Separate state file for dev environment
+    # Backend configuration will be provided by workflow
   }
 }
 

@@ -1,8 +1,6 @@
 terraform {
   backend "azurerm" {
-    resource_group_name  = "rg-mcp-dev"
-    storage_account_name = "stmcptfstate"
-    container_name      = "tfstate"
-    key                = "mcp.tfstate"
+    # Backend configuration will be provided during initialization
+    # This ensures we can use different configurations for different environments
   }
 }
