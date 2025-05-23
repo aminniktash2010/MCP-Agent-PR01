@@ -21,3 +21,13 @@ variable "project_name" {
   type        = string
   default     = "mcp-agent"
 }
+
+variable "tags" {
+  description = "Default tags to apply to resources"
+  type        = map(string)
+  default = {
+    Environment = "Development"
+    ManagedBy   = "Terraform"
+    Project     = "Demo"
+  }
+}
