@@ -1,8 +1,8 @@
 terraform {
   backend "azurerm" {
-    resource_group_name  = "rg-terraform-demo"
-    storage_account_name = "tfstatevnopvsh3"
-    container_name       = "tfstate"
-    key                 = "terraform.tfstate"
+    resource_group_name  = "rg-mcp-dev"
+    storage_account_name = "stmcptfstate"
+    container_name      = "tfstate"
+    key                = "mcp.tfstate"
   }
 }

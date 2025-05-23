@@ -1,13 +1,9 @@
 resource "azurerm_virtual_network" "vnet" {
-  name                = "vnet-${var.environment}"
+  name                = "vnet-mcp-${var.environment}"
   resource_group_name = var.resource_group_name
   location            = var.location
   address_space       = var.address_space
-
-  tags = {
-    Environment = var.environment
-    Terraform   = "true"
-  }
+  tags                = var.tags
 }
 
 resource "azurerm_subnet" "subnet" {
@@ -20,14 +16,10 @@ resource "azurerm_subnet" "subnet" {
 
 resource "azurerm_network_security_group" "nsg" {
   count               = length(var.subnet_names)
-  name                = "nsg-${var.subnet_names[count.index]}"
+  name                = "nsg-mcp-${var.environment}-${var.subnet_names[count.index]}"
   location            = var.location
   resource_group_name = var.resource_group_name
-
-  tags = {
-    Environment = var.environment
-    Terraform   = "true"
-  }
+  tags                = var.tags
 }
 
 resource "azurerm_subnet_network_security_group_association" "nsg_association" {

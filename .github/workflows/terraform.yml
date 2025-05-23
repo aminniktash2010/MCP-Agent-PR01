@@ -20,13 +20,13 @@ env:
   ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
   ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
   ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-  TF_WORKSPACE: ${{ (github.ref == 'refs/heads/main' && github.event_name == 'push') && 'prod' || 'dev' }}
+  TF_WORKSPACE: 'dev'
 
 jobs:
   terraform:
     name: 'Terraform'
     runs-on: ubuntu-latest
-    environment: ${{ (github.ref == 'refs/heads/main' && github.event_name == 'push') && 'production' || 'development' }}
+    environment: dev
     concurrency: 
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: false

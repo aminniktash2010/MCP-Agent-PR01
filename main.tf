@@ -15,34 +15,29 @@ terraform {
 
 provider "azurerm" {
   features {}
-  
-  # These will be picked up from environment variables:
-  # ARM_CLIENT_ID1
-  # ARM_CLIENT_SECRET
-  # ARM_SUBSCRIPTION_ID
-  # ARM_TENANT_ID
 }
 
 provider "random" {}
 
-# Create a resource group
+# Create a resource group for Terraform state
 resource "azurerm_resource_group" "rg" {
-  name     = "rg-terraform-demo"
-  location = "canadacentral"  # Using Canada Central as seen in your existing resources
+  name     = "rg-mcp-tfstate"
+  location = "canadacentral"
 
   tags = {
-    Environment = "Development"
-    Project     = "Terraform Demo"
+    Environment = "shared"
+    Project     = "MCP"
+    ManagedBy   = "Terraform"
   }
 }
 
 # Create storage account for Terraform state
 resource "azurerm_storage_account" "tfstate" {
-  name                     = "tfstate${random_string.storage_account_suffix.result}"
+  name                     = "stmcptfstate${random_string.storage_account_suffix.result}"
   resource_group_name      = azurerm_resource_group.rg.name
   location                 = azurerm_resource_group.rg.location
   account_tier             = "Standard"
-  account_replication_type = "LRS"
+  account_replication_type = "GRS"  # Using GRS for better state file protection
   min_tls_version         = "TLS1_2"
 
   blob_properties {
@@ -50,22 +45,15 @@ resource "azurerm_storage_account" "tfstate" {
   }
 
   tags = {
-    Environment = "Development"
-    Project     = "Terraform Demo"
-    Purpose     = "Terraform State"
+    Environment = "shared"
+    Project     = "MCP"
+    ManagedBy   = "Terraform"
   }
 }
 
-# Generate random suffix for storage account name
+# Generate random suffix for globally unique storage account name
 resource "random_string" "storage_account_suffix" {
   length  = 8
   special = false
   upper   = false
-}
-
-# Create container for Terraform state
-resource "azurerm_storage_container" "tfstate" {
-  name                  = "tfstate"
-  storage_account_name  = azurerm_storage_account.tfstate.name
-  container_access_type = "private"
 }

@@ -30,3 +30,9 @@ variable "subnet_names" {
   type        = list(string)
   default     = ["app-subnet", "db-subnet"]
 }
+
+variable "tags" {
+  description = "Resource tags"
+  type        = map(string)
+  default     = {}
+}
