@@ -4,21 +4,30 @@ on:
   push:
     branches:
       - main
+    paths:
+      - '**.tf'
+      - '.github/workflows/terraform.yml'
   pull_request:
     branches:
       - main
+    paths:
+      - '**.tf'
+      - '.github/workflows/terraform.yml'
+  workflow_dispatch:
 
 env:
-  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-  ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+  ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+  TF_WORKSPACE: ${{ github.event.pull_request.base.ref == 'main' && 'prod' || 'dev' }}
 
 jobs:
   terraform:
     name: 'Terraform'
     runs-on: ubuntu-latest
     environment: ${{ github.event.pull_request.base.ref == 'main' && 'production' || 'development' }}
+    concurrency: ${{ github.workflow }}-${{ github.ref }}
 
     defaults:
       run:
@@ -35,47 +44,71 @@ jobs:
 
     - name: Terraform Format
       id: fmt
-      run: terraform fmt -check
+      run: terraform fmt -check -recursive
       continue-on-error: true
+
+    - name: Select Terraform Workspace
+      id: workspace
+      run: |
+        cd environments/${TF_WORKSPACE}
+        terraform workspace select ${TF_WORKSPACE} || terraform workspace new ${TF_WORKSPACE}
 
     - name: Terraform Init
       id: init
+      working-directory: environments/${TF_WORKSPACE}
       run: |
         terraform init \
           -backend-config="resource_group_name=rg-terraform-demo" \
           -backend-config="storage_account_name=tfstatevnopvsh3" \
-          -backend-config="container_name=tfstate"
+          -backend-config="container_name=tfstate" \
+          -backend-config="key=${TF_WORKSPACE}.tfstate"
 
     - name: Terraform Validate
       id: validate
+      working-directory: environments/${TF_WORKSPACE}
       run: terraform validate -no-color
 
     - name: Terraform Plan
       id: plan
-      if: github.event_name == 'pull_request'
-      run: terraform plan -no-color -input=false
+      working-directory: environments/${TF_WORKSPACE}
+      run: |
+        terraform plan -no-color -input=false -detailed-exitcode -out=tfplan 2>&1 | tee plan_output.txt
+        echo "PLAN_OUTPUT<<EOF" >> $GITHUB_ENV
+        cat plan_output.txt >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
       continue-on-error: true
 
     - name: Update Pull Request
       uses: actions/github-script@v6
       if: github.event_name == 'pull_request'
       env:
-        PLAN: "${{ steps.plan.outputs.stdout }}"
+        PLAN: "${{ env.PLAN_OUTPUT }}"
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
-          const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
-          #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
-          #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
-          #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+          const output = `### Terraform Plan Results for \`${process.env.TF_WORKSPACE}\` environment 🚀
+
+          #### Terraform Format and Style 🖌 \`${{ steps.fmt.outcome }}\`
+          ${steps.fmt.outcome == 'failure' ? '❌ Running terraform fmt suggested changes. Please run terraform fmt on your code.' : '✅ Code style is acceptable'}
+
+          #### Terraform Initialization ⚙️ \`${{ steps.init.outcome }}\`
+          ${steps.init.outcome == 'failure' ? '❌ Error during terraform init. Check the logs for more details.' : '✅ Terraform has been successfully initialized'}
+
+          #### Terraform Validation 🤖 \`${{ steps.validate.outcome }}\`
+          ${steps.validate.outcome == 'failure' ? '❌ Validation failed. Check the logs for more details.' : '✅ Terraform configuration is valid'}
+
+          #### Terraform Plan 📖 \`${{ steps.plan.outcome }}\`
 
           <details><summary>Show Plan</summary>
 
-          \`\`\`terraform\n
+          \`\`\`terraform
           ${process.env.PLAN}
           \`\`\`
 
-          </details>`;
+          </details>
+
+          *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*
+          *Working Directory: \`environments/${process.env.TF_WORKSPACE}\`*`;
 
           github.rest.issues.createComment({
             issue_number: context.issue.number,
@@ -86,8 +119,20 @@ jobs:
 
     - name: Terraform Plan Status
       if: steps.plan.outcome == 'failure'
-      run: exit 1
+      run: |
+        exitcode=$?
+        if [ $exitcode -eq 1 ]; then
+          echo "Terraform plan failed"
+          exit 1
+        fi
+        if [ $exitcode -eq 2 ]; then
+          echo "Terraform plan has changes"
+          exit 0
+        fi
 
     - name: Terraform Apply
       if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-      run: terraform apply -auto-approve -input=false
+      working-directory: environments/${TF_WORKSPACE}
+      run: |
+        echo "🚀 Applying Terraform plan for ${TF_WORKSPACE} environment..."
+        terraform apply -auto-approve -input=false tfplan
