@@ -1,0 +1,67 @@
+name: 'Terraform Destroy'
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to destroy (dev/prod)'
+        required: true
+        type: choice
+        options:
+        - dev
+        - prod
+      confirm:
+        description: 'Type the environment name again to confirm destruction'
+        required: true
+        type: string
+
+env:
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
+jobs:
+  terraform:
+    name: 'Terraform Destroy'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: ./environments/${{ inputs.environment }}
+
+    steps:
+    - name: Verify Confirmation
+      if: inputs.confirm != inputs.environment
+      run: |
+        echo "Error: Confirmation text does not match environment name"
+        exit 1
+
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.5.0
+
+    - name: Terraform Init
+      run: |
+        terraform init \
+          -backend-config="resource_group_name=rg-terraform-demo" \
+          -backend-config="storage_account_name=tfstatevnopvsh3" \
+          -backend-config="container_name=tfstate"
+
+    - name: Terraform Plan Destroy
+      run: terraform plan -destroy -out=destroy.tfplan
+
+    - name: Pause for Review
+      run: |
+        echo "⚠️ DANGER: About to destroy environment: ${{ inputs.environment }}"
+        echo "Waiting 30 seconds for emergency cancellation..."
+        sleep 30
+
+    - name: Terraform Destroy
+      run: terraform apply destroy.tfplan
